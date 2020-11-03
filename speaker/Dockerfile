@@ -1,4 +1,4 @@
-FROM alpine:latest
+FROM registry.access.redhat.com/ubi8/ubi:8.2
 
 ADD speaker /speaker
 

@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -63,6 +64,7 @@ type addressPool struct {
 	Name              string
 	Addresses         []string
 	AvoidBuggyIPs     bool               `yaml:"avoid-buggy-ips"`
+	AllowClusterIP    bool               `yaml:"allow-cluster-ip"`
 	AutoAssign        *bool              `yaml:"auto-assign"`
 	BGPAdvertisements []bgpAdvertisement `yaml:"bgp-advertisements"`
 }
@@ -129,6 +131,8 @@ type Pool struct {
 	// If false, prevents IP addresses to be automatically assigned
 	// from this pool.
 	AutoAssign bool
+	// If true, assign the cluster IP as the external IP.
+	AllowClusterIP bool
 	// When an IP is allocated from this pool, how should it be
 	// translated into BGP announcements?
 	BGPAdvertisements []*BGPAdvertisement
@@ -199,6 +203,14 @@ func Parse(bs []byte) (*Config, error) {
 		peer, err := parsePeer(p)
 		if err != nil {
 			return nil, fmt.Errorf("parsing peer #%d: %s", i+1, err)
+		}
+		for _, ep := range cfg.Peers {
+			// TODO: Be smarter regarding conflicting peers. For example, two
+			// peers could have a different hold time but they'd still result
+			// in two BGP sessions between the speaker and the remote host.
+			if reflect.DeepEqual(peer, ep) {
+				return nil, fmt.Errorf("peer #%d already exists", i+1)
+			}
 		}
 		cfg.Peers = append(cfg.Peers, peer)
 	}
@@ -308,8 +320,9 @@ func parseAddressPool(p addressPool, bgpCommunities map[string]uint32) (*Pool, e
 	}
 
 	ret := &Pool{
-		Protocol:      p.Protocol,
-		AvoidBuggyIPs: p.AvoidBuggyIPs,
+		Protocol:       p.Protocol,
+		AvoidBuggyIPs:  p.AvoidBuggyIPs,
+		AllowClusterIP: p.AllowClusterIP,
 		AutoAssign:    true,
 	}
 
