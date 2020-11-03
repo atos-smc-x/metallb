@@ -21,7 +21,6 @@ import (
 	"sort"
 
 	"github.com/go-kit/kit/log"
-	"github.com/hashicorp/memberlist"
 	"go.universe.tf/metallb/internal/config"
 	"go.universe.tf/metallb/internal/layer2"
 	"k8s.io/api/core/v1"
@@ -30,7 +29,7 @@ import (
 type layer2Controller struct {
 	announcer *layer2.Announce
 	myNode    string
-	mList     *memberlist.Memberlist
+	sList     SpeakerList
 }
 
 func (c *layer2Controller) SetConfig(log.Logger, *config.Config) error {
@@ -39,23 +38,18 @@ func (c *layer2Controller) SetConfig(log.Logger, *config.Config) error {
 
 // usableNodes returns all nodes that have at least one fully ready
 // endpoint on them.
-func usableNodes(eps *v1.Endpoints, mList *memberlist.Memberlist) []string {
-	var activeNodes map[string]bool
-	if mList != nil {
-		activeNodes = map[string]bool{}
-		for _, n := range mList.Members() {
-			activeNodes[n.Name] = true
-		}
-	}
-
+// The speakers parameter is a map with the node name as key and the readiness
+// status as value (true means ready, false means not ready).
+// If the speakers map is nil, it is ignored.
+func usableNodes(eps *v1.Endpoints, speakers map[string]bool) []string {
 	usable := map[string]bool{}
 	for _, subset := range eps.Subsets {
 		for _, ep := range subset.Addresses {
 			if ep.NodeName == nil {
 				continue
 			}
-			if activeNodes != nil {
-				if _, ok := activeNodes[*ep.NodeName]; !ok {
+			if speakers != nil {
+				if ready, ok := speakers[*ep.NodeName]; !ok || !ready {
 					continue
 				}
 			}
@@ -76,7 +70,7 @@ func usableNodes(eps *v1.Endpoints, mList *memberlist.Memberlist) []string {
 }
 
 func (c *layer2Controller) ShouldAnnounce(l log.Logger, name string, svc *v1.Service, eps *v1.Endpoints) string {
-	nodes := usableNodes(eps, c.mList)
+	nodes := usableNodes(eps, c.sList.UsableSpeakers())
 	// Sort the slice by the hash of node + service name. This
 	// produces an ordering of ready nodes that is unique to this
 	// service.
@@ -110,5 +104,6 @@ func (c *layer2Controller) DeleteBalancer(l log.Logger, name, reason string) err
 }
 
 func (c *layer2Controller) SetNode(log.Logger, *v1.Node) error {
+	c.sList.Rejoin()
 	return nil
 }

@@ -8,7 +8,7 @@ creating and deploying a configmap into the same namespace
 (metallb-system) as the deployment.
 
 There is an example configmap in
-[`manifests/example-config.yaml`](https://raw.githubusercontent.com/google/metallb/v0.9.3/manifests/example-config.yaml),
+[`manifests/example-config.yaml`](https://raw.githubusercontent.com/google/metallb/v0.9.4/manifests/example-config.yaml),
 annotated with explanatory comments.
 
 If you've named the configmap `config.yaml`, you can deploy the manifest with `kubectl apply -f config.yaml`.
@@ -264,6 +264,11 @@ address-pools:
 Addresses can still be specifically allocated from the "expensive"
 pool with the methods described in
 the [usage](/usage/#requesting-specific-ips) section.
+
+{{% notice note %}}
+To specify a single IP address in a pool, use `/32` in the CIDR notation
+(e.g. `42.176.25.64/32`).
+{{% /notice %}}
 
 ### Handling buggy networks
 
